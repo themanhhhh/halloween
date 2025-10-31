@@ -186,12 +186,132 @@ const useRetroAudio = () => {
     setEnabled((prev) => !prev);
   }, []);
 
+  // Background music - nhạc nền tự động từ file có sẵn trong public
+  const bgMusicRef = useRef<HTMLAudioElement | null>(null);
+  const [bgMusicEnabled, setBgMusicEnabled] = useState(true);
+
+  // Khởi tạo nhạc nền từ file có sẵn trong public
+  useEffect(() => {
+    if (!bgMusicRef.current) {
+      // Đặt đường dẫn file nhạc ở đây - đổi tên file theo file bạn có
+      // Ví dụ: /background-music.mp3, /bg-music.wav, /halloween.mp3, etc.
+      const musicPath = "/background-music.mp3";
+      
+      const audio = new Audio(musicPath);
+      audio.loop = true;
+      audio.volume = 0.5; // Volume mặc định 50%
+      
+      // Xử lý lỗi khi file không tồn tại
+      audio.addEventListener("error", () => {
+        console.warn("⚠️ Không tìm thấy file nhạc:", musicPath, "Vui lòng đặt file nhạc vào thư mục public/");
+        bgMusicRef.current = null;
+      });
+      
+      bgMusicRef.current = audio;
+
+      // Thử phát nhạc ngay lập tức nếu được phép
+      if (enabled && bgMusicEnabled) {
+        audio.play().catch(() => {
+          // Autoplay bị block hoặc file không tồn tại - không hiển thị lỗi
+        });
+      }
+    }
+
+    return () => {
+      if (bgMusicRef.current) {
+        bgMusicRef.current.pause();
+        bgMusicRef.current = null;
+      }
+    };
+  }, [enabled, bgMusicEnabled]); // Chạy lại khi enabled hoặc bgMusicEnabled thay đổi
+
+  const startBackgroundMusic = useCallback(() => {
+    if (!enabled || !bgMusicEnabled) return;
+    
+    // Khởi tạo audio nếu chưa có
+    if (!bgMusicRef.current) {
+      const musicPath = "/background-music.mp3";
+      const audio = new Audio(musicPath);
+      audio.loop = true;
+      audio.volume = 0.5;
+      
+      // Xử lý lỗi khi file không tồn tại
+      audio.addEventListener("error", () => {
+        console.warn("⚠️ Không tìm thấy file nhạc:", musicPath, "Vui lòng đặt file nhạc vào thư mục public/");
+        bgMusicRef.current = null;
+      });
+      
+      bgMusicRef.current = audio;
+    }
+    
+    // Thử phát nhạc nếu audio tồn tại
+    if (bgMusicRef.current) {
+      bgMusicRef.current.play().catch(() => {
+        // Autoplay bị block hoặc file không tồn tại - không hiển thị lỗi
+      });
+    }
+  }, [enabled, bgMusicEnabled]);
+
+  const stopBackgroundMusic = useCallback(() => {
+    if (bgMusicRef.current) {
+      bgMusicRef.current.pause();
+    }
+  }, []);
+
+  const toggleBgMusic = useCallback(() => {
+    setBgMusicEnabled((prev) => {
+      if (prev) {
+        stopBackgroundMusic();
+      } else {
+        startBackgroundMusic();
+      }
+      return !prev;
+    });
+  }, [startBackgroundMusic, stopBackgroundMusic]);
+
+  useEffect(() => {
+    if (bgMusicRef.current) {
+      bgMusicRef.current.volume = 0.5;
+    }
+  }, []);
+
+  // Tự động bật nhạc nền khi enabled hoặc bgMusicEnabled thay đổi
+  useEffect(() => {
+    if (enabled && bgMusicEnabled) {
+      // Thử phát nhạc ngay
+      startBackgroundMusic();
+
+      // Nếu browser block autoplay, đợi user interaction
+      const handleFirstInteraction = () => {
+        startBackgroundMusic();
+        document.removeEventListener("click", handleFirstInteraction);
+        document.removeEventListener("keydown", handleFirstInteraction);
+        document.removeEventListener("touchstart", handleFirstInteraction);
+      };
+      
+      document.addEventListener("click", handleFirstInteraction, { once: true });
+      document.addEventListener("keydown", handleFirstInteraction, { once: true });
+      document.addEventListener("touchstart", handleFirstInteraction, { once: true });
+
+      return () => {
+        document.removeEventListener("click", handleFirstInteraction);
+        document.removeEventListener("keydown", handleFirstInteraction);
+        document.removeEventListener("touchstart", handleFirstInteraction);
+      };
+    } else {
+      stopBackgroundMusic();
+    }
+  }, [enabled, bgMusicEnabled, startBackgroundMusic, stopBackgroundMusic]);
+
+
   return {
     enabled,
     toggle,
     playCoin,
     playClick,
     playSuccess,
+    bgMusicEnabled,
+    toggleBgMusic,
   };
 };
 
@@ -393,7 +513,7 @@ const VoucherPreview = ({
           <p>( Rù rì )8B Đặng Tất , Ba Đình , Hà Nội</p>
           <p>( Drip Station ) - Tầng 4 khu tập thể A ngõ 70 Ngọc Khánh </p>
           <p> ( Coffe Koem )107-K2 KTT Thành Công , Ba Đình </p>
-          <p> (Leos Tavern ) 9A Bảo Khánh Hoàn Kiếm</p>
+          <p> (Leo s Tavern ) 9A Bảo Khánh Hoàn Kiếm</p>
         </span>
       </div>
       <p className="mt-4 text-[11px] uppercase tracking-[0.3em] text-[#f8fafc]/75">
@@ -476,6 +596,8 @@ export default function Home() {
     toggle: toggleSound,
     playCoin,
     playClick,
+    bgMusicEnabled,
+    toggleBgMusic,
   } = useRetroAudio();
 
   const { next: nextRandom, pick, seedRef } = useRandom();
@@ -613,11 +735,39 @@ export default function Home() {
   return (
     <>
       <div className="retro-scanline" aria-hidden="true" />
+      <div className="halloween-bg" aria-hidden="true">
+        <div className="halloween-bg__item halloween-bg__item--1">
+          <Image src="/hal.png" alt="" fill sizes="150px" className="halloween-bg__image" />
+        </div>
+        <div className="halloween-bg__item halloween-bg__item--2">
+          <Image src="/hal2.png" alt="" fill sizes="150px" className="halloween-bg__image" />
+        </div>
+        <div className="halloween-bg__item halloween-bg__item--3">
+          <Image src="/hal4.png" alt="" fill sizes="70px" className="halloween-bg__image" />
+        </div>
+        <div className="halloween-bg__item halloween-bg__item--4">
+          <Image src="/hal2.png" alt="" fill sizes="60px" className="halloween-bg__image" />
+        </div>
+        <div className="halloween-bg__item halloween-bg__item--5">
+          <Image src="/hal.png" alt="" fill sizes="65px" className="halloween-bg__image" />
+        </div>
+        <div className="halloween-bg__item halloween-bg__item--6">
+          <Image src="/hal4.png" alt="" fill sizes="75px" className="halloween-bg__image" />
+        </div>
+      </div>
       <div className="sound-toggle">
-        <span>Âm thanh</span>
-        <button type="button" onClick={toggleSound}>
-          {soundEnabled ? "ON" : "OFF"}
-        </button>
+        <div className="sound-toggle__group">
+          <span>Âm thanh</span>
+          <button type="button" onClick={toggleSound}>
+            {soundEnabled ? "ON" : "OFF"}
+          </button>
+        </div>
+        <div className="sound-toggle__group">
+          <span>Nhạc nền</span>
+          <button type="button" onClick={toggleBgMusic}>
+            {bgMusicEnabled ? "ON" : "OFF"}
+          </button>
+        </div>
       </div>
 
       <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center gap-8 px-6 py-16 text-center md:gap-10 md:px-10">
